@@ -1,0 +1,115 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function - Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function - Check if user owns the resource
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // ============================================================================
+    // USERS Collection
+    // ============================================================================
+    match /users/{userId} {
+      // User có thể đọc profile của chính mình
+      allow read: if isOwner(userId);
+      
+      // User có thể tạo profile của chính mình
+      allow create: if isOwner(userId);
+      
+      // User có thể update profile của chính mình
+      allow update: if isOwner(userId);
+      
+      // Không cho phép delete
+      allow delete: if false;
+    }
+
+    // ============================================================================
+    // LEADERBOARD Collection (Public stats only)
+    // ============================================================================
+    // Lưu dữ liệu public để hiển thị bảng xếp hạng:
+    // - name, total_xp, current_streak, total_learning_minutes, updated_at
+    // Tránh mở quyền đọc toàn bộ /users (vì có thể chứa email / thông tin nhạy cảm).
+    match /leaderboard/{userId} {
+      // Tất cả authenticated users có thể đọc leaderboard
+      allow read: if isAuthenticated();
+
+      // User chỉ được tạo / update entry của chính mình
+      allow create, update: if isOwner(userId);
+
+      // Không cho phép delete (tránh phá leaderboard)
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // LEARNING_SESSIONS Collection
+    // ============================================================================
+    match /learning_sessions/{sessionId} {
+      // Chỉ user owner mới được đọc sessions của mình
+      allow read: if isAuthenticated() && 
+                     resource.data.user_id == request.auth.uid;
+      
+      // Chỉ user owner mới được tạo session
+      allow create: if isAuthenticated() && 
+                       request.resource.data.user_id == request.auth.uid;
+      
+      // Chỉ user owner mới được update session của mình
+      allow update: if isAuthenticated() && 
+                       resource.data.user_id == request.auth.uid;
+      
+      // Không cho phép delete
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // EXERCISE_RESULTS Collection
+    // ============================================================================
+    match /exercise_results/{resultId} {
+      // Chỉ user owner mới được đọc results của mình
+      allow read: if isAuthenticated() && 
+                     resource.data.user_id == request.auth.uid;
+      
+      // Chỉ user owner mới được tạo result
+      allow create: if isAuthenticated() && 
+                       request.resource.data.user_id == request.auth.uid;
+      
+      // Không cho phép update results (immutable)
+      allow update: if false;
+      
+      // Không cho phép delete
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // VOCABULARY Collection (Read-only for all authenticated users)
+    // ============================================================================
+    match /vocabulary/{wordId} {
+      // Tất cả authenticated users có thể đọc vocabulary
+      allow read: if isAuthenticated();
+      
+      // Chỉ admin mới được write (manage qua Firebase Console)
+      allow write: if false;
+    }
+    
+    // ============================================================================
+    // USER_VOCABULARY_PROGRESS Collection
+    // ============================================================================
+    match /user_vocabulary_progress/{progressId} {
+      // Chỉ user owner mới được đọc progress của mình
+      allow read: if isAuthenticated() && 
+                     resource.data.user_id == request.auth.uid;
+      
+      // Chỉ user owner mới được tạo/update progress
+      allow create, update: if isAuthenticated() && 
+                               request.resource.data.user_id == request.auth.uid;
+      
+      // Không cho phép delete
+      allow delete: if false;
+    }
+  }
+}
